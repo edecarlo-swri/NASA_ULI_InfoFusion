@@ -1,5 +1,6 @@
 """Functions for interfacing to NATS simulation"""
 
+import os
 import pandas as pd
 import numpy as np
 from io import StringIO
@@ -162,6 +163,7 @@ class NatsSimulationWrapper:
         jpype.shutdownJVM()
 
 
+NATS_HOME = os.environ.get('NATS_HOME')
 
 def read_nats_output_file(filename):
     """Read the specified NATS output file
@@ -225,3 +227,17 @@ def read_nats_output_file(filename):
 
     return df
 
+def get_closest_node_at_airport(lat,lon,airport,domain=['Rwy','Gate','Txy','Ramp','Parking']):
+
+    df = pd.read_csv(NATS_HOME+'/share/libairport_layout/Airport_Rwy/{}_Nodes_Def.csv'.format(airport))
+    df = df.loc[df.domain.isin(domain)]
+    df['dists']=np.sqrt((df.lat-lat)**2+(df.lon-lon)**2)
+    closest_node = df.loc[df.dists.idxmin()]['id']
+    return closest_node
+
+def get_list_of_adjacent_nodes(node,airport):
+    df = pd.read_csv(NATS_HOME+'/share/libairport_layout/Airport_Rwy/{}_Nodes_Links.csv'.format(airport))
+    df = df.loc[(df['n1.id']==node) | (df['n2.id']==node)]
+    adjacent_nodes = [nid for nid in df['n1.id'] if nid != node]+[nid for nid in df['n2.id'] if nid != node]
+    return list(set(adjacent_nodes))
+    

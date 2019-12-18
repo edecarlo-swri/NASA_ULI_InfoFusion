@@ -123,4 +123,74 @@ def read_iff_file(filename, record_types=3, interp=False):
         result = data_frames
 
     return result
+
+def get_departure_airport_from_iff(iff_data,callsign):
+    origin_opts = []
+
+    # Get all unique origin options from the iff_data set
+    for key in iff_data.keys():
+        df = iff_data[key][iff_data[key].callsign==callsign]    
+        if 'Orig' in df.columns:
+            df.dropna(axis=0,subset=['Orig'],inplace=True)
+            origin_opts.extend([orig for orig in list(df.Orig.unique()) if not orig=='nan'])
+        if 'estOrig' in df.columns:
+            df.dropna(axis=0,subset=['estOrig'],inplace=True)
+            origin_opts.extend([orig for orig in list(df.estOrig.unique()) if not orig=='nan'])
+
+    # In the case of multiple origin options names, take the first one
+    if len(origin_opts)>0:
+        origin = list(set((origin_opts)))[0]
+    else:
+        origin = []
+
+    # Add K to the front of an airport code to make it compatible with NATS
+    if len(origin)==3:
+        origin = 'K'+origin
+        
+    if len(origin) == 4:
+        # Check that airport code begins with 'K'
+        check = origin[0]=='K'
+        if check:
+            return origin
+    else:
+        #TODO: Decide what to do if no airport is found
+        print("No viable departure airport found for {}. Returning 'None'.".format(callsign))
+        return None
+        
+
+def get_arrival_airport_from_iff(iff_data,callsign):
+    dest_opts = []
+
+    # Get all unique origin options from the iff_data set
+    for key in iff_data.keys():
+        df = iff_data[key][iff_data[key].callsign==callsign]    
+        if 'Dest' in df.columns:
+            df.dropna(axis=0,subset=['Dest'],inplace=True)
+            dest_opts.extend([orig for orig in list(df.Dest.unique()) if not orig=='nan'])
+        if 'estDest' in df.columns:
+            df.dropna(axis=0,subset=['estDest'],inplace=True)
+            dest_opts.extend([orig for orig in list(df.estDest.unique()) if not orig=='nan'])
+    # In the case of multiple origin options names, take the first one
+
+    if len(dest_opts)>0:
+        dest = list(set(dest_opts))[0]
+    else:
+        dest = []
+        
+    # Add K to the front of an airport code to make it compatible with NATS
+    if len(dest)==3:
+        dest = 'K'+dest
+        
+    if len(dest) == 4:
+        # Check that airport code begins with 'K'
+        check = dest[0]=='K'
+        if check:
+            return dest
+    else:
+        #TODO: Decide what to do if no airport is found
+        print("No viable destination airport found for {}. Returning 'None'.".format(callsign))
+        return None
     
+def check_if_flight_has_departed(iff_data,callsign):
+    return False
+     
