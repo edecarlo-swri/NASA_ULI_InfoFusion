@@ -240,4 +240,15 @@ def get_list_of_adjacent_nodes(node,airport):
     df = df.loc[(df['n1.id']==node) | (df['n2.id']==node)]
     adjacent_nodes = [nid for nid in df['n1.id'] if nid != node]+[nid for nid in df['n2.id'] if nid != node]
     return list(set(adjacent_nodes))
+
+def get_adjacent_node_closer_to_runway(nodeList,runwayNode,airport):
+    df = pd.read_csv(NATS_HOME+'/share/libairport_layout/Airport_Rwy/{}_Nodes_Def.csv'.format(airport))
+    rwy_lat = df.loc[df['id']==runwayNode]['lat'].values[0]
+    rwy_lon = df.loc[df['id']==runwayNode]['lon'].values[0]
+
+    df = df.loc[df['id'].isin(nodeList)].copy()
+    df['dists']=np.sqrt((df.lat-rwy_lat)**2+(df.lon-rwy_lon)**2)
+    closest_node = df.loc[df.dists.idxmin()]['id']
+    print('closest node is:',closest_node)
+    return closest_node
     

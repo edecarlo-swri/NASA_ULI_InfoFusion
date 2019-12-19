@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 from pkg_resources import parse_version
 
+from PARA_ATM.io import nats
+
 def read_iff_file(filename, record_types=3, interp=False):
     """
     Read IFF file and return data frames for requested record types
@@ -191,6 +193,107 @@ def get_arrival_airport_from_iff(iff_data,callsign):
         print("No viable destination airport found for {}. Returning 'None'.".format(callsign))
         return None
     
-def check_if_flight_has_departed(iff_data,callsign):
-    return False
+def check_if_flight_has_departed(iff_data,callsign,natsSim,departureAirport):
+    departureAirportElevation = natsSim.airportInterface.select_airport(departureAirport).getElevation()
+    departureAirportLat, departureAirportLon = natsSim.airportInterface.getLocation(departureAirport)
+
+    initial_lat = iff_data[3].loc[iff_data[3].callsign==callsign,'latitude'][0]
+    initial_lon = iff_data[3].loc[iff_data[3].callsign==callsign,'longitude'][0]
+    initial_alt = iff_data[3].loc[iff_data[3].callsign==callsign,'altitude'][0]
+
+    dist_from_airport = np.sqrt((departureAirportLat-initial_lat)**2+(departureAirportLon-initial_lon)**2)
+    
+    if ((initial_alt < departureAirportElevation+50.) & (dist_from_airport < 0.02)):
+        flightTakenOff = False
+    else:
+        flightTakenOff = True
+    return flightTakenOff
+
+def create_gate_to_runway_from_iff(trackData,natsSim,departureAirport):
+    
+    # Assign airport nodes from NATS to all track data points
+    trackData.loc[:,'airportNodes']= [nats.get_closest_node_at_airport(lat,lon,departureAirport) for lat,lon in zip(trackData.latitude,trackData.longitude)]
+
+    # Determine the takeoff runway from track data
+    takeoff_rwy = get_takeoff_runway_from_track_data(trackData)
+
+    # Get the list of unique nodes identified in the track data
+    unique_nodes = trackData.airportNodes.unique()
+    
+    # Get the first node that starts with a gate
+    # TODO: Return an error if trackList is empty
+    trackList = [[node for node in unique_nodes if 'Gate' in node][0]]
+
+    # Get from gate to taxiways while not allowing going back to the gate
+    # TODO: How to handle if it does go back to the gate?
+    while 'Txy' not in trackList[-1]:
+        print(trackList)
+
+        # Get list of adjacent nodes to the last node in the trackList.
+        # Upon first iteration this will be the gate
+        adjacent_nodes = nats.get_list_of_adjacent_nodes(trackList[-1],departureAirport)
+
+        # Get list of adjacent nodes that have already been identified
+        # in the set of unique nodes
+        adjacent_nodes_in_unique_nodes = [adj for adj in adjacent_nodes
+                                          if (adj in unique_nodes and
+                                              adj not in trackList and
+                                              'Gate' not in adj)]
+
+        # If only one of the adjacent nodes is in the set of unique nodes
+        # Use it as the next node
+        if len(adjacent_nodes_in_unique_nodes) == 1:
+            trackList.append(adjacent_nodes_in_unique_nodes[0])
+
+        # If more than one of the adjacent nodes is in the set of unique
+        # nodes, identify the one that is closest to the runway
+        # and use it as the next node
+        elif len(adjacent_nodes_in_unique_nodes) > 1:
+            # Use adjacent node that gets closer to the runway
+            trackList.append(nats.get_adjacent_node_closer_to_runway(
+                adjacent_nodes_in_unique_nodes,takeoff_rwy,departureAirport)[0])
+
+        # If none of the adjacent nodes have been identified as being in
+        # the set of unique nodes, use the node that is closest to the
+        # runway.
+        # TODO: Could also use the one that is closest to the next node in
+        # the unique node set
+        else:
+            adjacent_nodes_not_in_trackList = [adj for adj in adjacent_nodes
+                                               if adj not in trackList and 'Gate'
+                                               not in adj]
+            print("adjacent nodes not in tracklist:", adjacent_nodes_not_in_trackList)
+            trackList.append(trackList.append(nats.get_adjacent_node_closer_to_runway(adjacent_nodes_not_in_trackList,takeoff_rwy,departureAirport)[0]))
+
+    while takeoff_runway not in trackList[-1]:
+        print(trackList)
+        adjacent_nodes = nats.get_list_of_adjacent_nodes(trackList[-1],departureAirport)
+        adjacent_nodes_in_unique_nodes = [adj for adj in adjacent_nodes if (adj in unique_nodes and adj not in trackList and 'Gate' not in adj)]
+
+        if len(adjacent_nodes_in_unique_nodes) == 1:
+            trackList.append(adjacent_nodes_in_unique_nodes[0])
+        elif len(adjacent_nodes_in_unique_nodes) > 1:
+            trackList.append(nats.get_adjacent_node_closer_to_runway(adjacent_nodes_in_unique_nodes,takeoff_rwy,departureAirport)[0])
+        else:
+            print('Using an adjacent node getting closer to the runway')
+            adjacent_nodes_not_in_trackList = [adj for adj in adjacent_nodes if adj not in trackList and 'Gate' not in adj and 'Ramp' not in adj]
+            trackList.append(trackList.append(nats.get_adjacent_node_closer_to_runway(adjacent_nodes_not_in_trackList,takeoff_rwy,departureAirport)[0]))
+                        
+        print(trackList)
+    return trackList
+
      
+def get_takeoff_runway_from_track_data(trackData,minRwySpeed=30.):
+    trackData = trackData[trackData.tas >= minRwySpeed].copy()
+    runway_segments = [node for node in trackData.airportNodes if 'Rwy' in node]
+    runway_numbers = [seg.split('_')[1] for seg in runway_segments]
+    rwys_opts,counts = np.unique(runway_numbers,return_counts=True)
+    idx = np.argmax(counts)
+    takeoff_runway_no = rwys_opts[idx]
+    #Get first Rwy segment in trackData that has takeoff_runway_no in it
+    takeoff_runway_node = [rwy for rwy in runway_segments if takeoff_runway_no in rwy][0]
+    # TODO:Check if takeoff_runway_node is an entry point in NATS
+    # If not then find the closest runway entry point in NATS
+
+    return takeoff_runway_node
+    
