@@ -228,17 +228,34 @@ def read_nats_output_file(filename):
     return df
 
 def get_closest_node_at_airport(lat,lon,airport,domain=['Rwy','Gate','Txy','Ramp','Parking']):
-
+    # Read node definition .csv file from NATS directory for given airport
     df = pd.read_csv(NATS_HOME+'/share/libairport_layout/Airport_Rwy/{}_Nodes_Def.csv'.format(airport))
-    df = df.loc[df.domain.isin(domain)]
-    df['dists']=np.sqrt((df.lat-lat)**2+(df.lon-lon)**2)
-    closest_node = df.loc[df.dists.idxmin()]['id']
-    return closest_node
 
-def get_list_of_adjacent_nodes(node,airport):
+    # Filter the nodes by the specified domain, default is all
+    df = df.loc[df.domain.isin(domain)]
+
+    # Compute distances between the node subset and the iff data lat/lon
+    df['dists']=np.sqrt((df.lat-lat)**2+(df.lon-lon)**2)
+
+    # Return node with the minimum distance
+    return df.loc[df.dists.idxmin()]['id']
+
+def get_list_of_adjacent_nodes(node,airport,domain=['Rwy','Txy','Ramp','Parking','Gate'], return_ordered=False):
+
+    # Read node link .csv file from NATS directory for given airport
     df = pd.read_csv(NATS_HOME+'/share/libairport_layout/Airport_Rwy/{}_Nodes_Links.csv'.format(airport))
-    df = df.loc[(df['n1.id']==node) | (df['n2.id']==node)]
+
+    # Filter dataframe by having the specified node in the
+    # n1 or n2 column
+    df = df.loc[(df['n1.id']==node) | (df['n2.id']==node)].copy()
+
+    # Get list of all the adjacent nodes to the specified node
     adjacent_nodes = [nid for nid in df['n1.id'] if nid != node]+[nid for nid in df['n2.id'] if nid != node]
+    adjacent_nodes = [node for node in adjacent_nodes if node.split('_')[0] in domain] 
+
+    # If we want to return the nodes ordered by domain
+    if return_ordered:
+       adjacent_nodes = [node for node in adjacent_nodes for key in domain if key in node]
     return list(set(adjacent_nodes))
 
 def get_adjacent_node_closer_to_runway(nodeList,runwayNode,airport):
@@ -249,6 +266,13 @@ def get_adjacent_node_closer_to_runway(nodeList,runwayNode,airport):
     df = df.loc[df['id'].isin(nodeList)].copy()
     df['dists']=np.sqrt((df.lat-rwy_lat)**2+(df.lon-rwy_lon)**2)
     closest_node = df.loc[df.dists.idxmin()]['id']
-    print('closest node is:',closest_node)
     return closest_node
+
+def get_shortest_taxi_route_from_A_to_B(nodeList,next_node,natsSim,airport):
+    taxi_routes=dict()
+    for node in nodeList:
+        taxi_routes[node]=list(natsSim.airportInterface.get_taxi_route_from_A_To_B('default',airport,node,next_node))
+
+    next_node,shortest_route = min(taxi_routes.items(), key = lambda x:len(x))
+    return shortest_route
     
