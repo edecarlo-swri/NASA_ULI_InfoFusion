@@ -1,4 +1,4 @@
-from NATS import NATS_Config
+from nats_gate_to_gate import GateToGate
 
 from PARA_ATM.io import iff, nats, utils
 from sys import argv
@@ -7,9 +7,10 @@ import numpy as np
 
 track_file = "../../../../Documents/nats_analyses/trx/cs_aal343.trx"
 mfl_file = "../../../../Documents/nats_analyses/trx/cs_aal343_mfl.trx"
-natsSim = NATS_Config()
+natsSim = GateToGate()
+natsSim.simulation(trx_file=track_file,mfl_file=mfl_file)
 
-iff_data = utils.read_data_file("../PARA_ATM/sample_data/IFF_SFO_ASDEX_ABC123.csv",record_types=[2,3,4])
+iff_data = utils.read_data_file("../../PARA_ATM/sample_data/IFF_SFO_ASDEX_ABC123.csv",record_types=[2,3,4])
 
 for callsign in iff_data[3].callsign.unique():
 

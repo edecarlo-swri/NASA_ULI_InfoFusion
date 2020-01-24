@@ -230,7 +230,6 @@ def create_gate_to_runway_from_iff(trackData,natsSim,departureAirport):
 
     # Determine the takeoff runway from track data
     takeoff_rwy = get_takeoff_runway_from_track_data(trackData)
-    print(takeoff_rwy)
 
     tf = [(val.split('_')[:2]!=takeoff_rwy.split('_')[:2] or val == takeoff_rwy) for val in trackData.airportNodes]
     banned_nodes = trackData.loc[[not i for i in tf],'airportNodes'].unique()
@@ -241,7 +240,6 @@ def create_gate_to_runway_from_iff(trackData,natsSim,departureAirport):
     # Get the first node that starts with a gate
     # TODO: Return an error if trackList is empty
     trackList = [[node for node in unique_nodes if 'Gate' in node][0]]
-    print(trackList[-1])
 
     # Get from gate to taxiways while not allowing going back to the gate
     # TODO: How to handle if it does go back to the gate in the data?
@@ -261,14 +259,12 @@ def create_gate_to_runway_from_iff(trackData,natsSim,departureAirport):
         # If only one of the adjacent nodes is in the set of unique nodes
         # Use it as the next node.
         if len(adjacent_nodes_in_unique_nodes) == 1:
-            print("In branch 1.")
             trackList.append(adjacent_nodes_in_unique_nodes[0])
 
         # If more than one of the adjacent nodes is in the set of unique
         # nodes, identify the one that is closest or (better yet) connects
         # to the next unique node and use it as the next node
         elif len(adjacent_nodes_in_unique_nodes) > 1:
-            print('In branch 2.')
             # Use adjacent node that gets closer or connects to the next unique node
             next_node = [node for node in unique_nodes
                             if node not in trackList and
@@ -283,9 +279,6 @@ def create_gate_to_runway_from_iff(trackData,natsSim,departureAirport):
         # TODO: Could also use the one that is closest to the next node in
         # the unique node set
         else:
-            print('In branch 3.')
-            print('adjacent_nodes:',adjacent_nodes)
-            print('trackList:',trackList)
             adjacent_nodes_not_in_trackList = [adj for adj in adjacent_nodes
                                                if (adj not in trackList and 'Gate'
                                                    not in adj and adj not in banned_nodes)]
@@ -313,7 +306,8 @@ def create_gate_to_runway_trx_using_nats(trackData,natsSim,departureAirport):
     departureGate = [node for node in unique_nodes if 'Gate' in node][0]
 
     trackList = list(natsSim.airportInterface.get_taxi_route_from_A_To_B('default',departureAirport,departureGate,takeoff_rwy))
-                   
+
+                  
     return trackList
 
      

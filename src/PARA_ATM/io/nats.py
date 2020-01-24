@@ -387,3 +387,68 @@ def get_shortest_taxi_route_from_A_to_B(nodeList,next_node,natsSim,airport):
     next_node,shortest_route = min(taxi_routes.items(), key = lambda x:len(x))
     return shortest_route
     
+def modify_trx_with_gate_to_gate(trx_file,callsign,trackpts,phase='departure',new_fname=None):
+
+    tracklist = ', '.join(['{{\"id\": \"{}\"}}'.format(pt) for pt in trackpts])
+    
+    f=open(trx_file,"r+")
+    lines = f.readlines()
+
+    fnew = open(new_fname,'w+')
+
+    cs = None
+    for line in lines:
+        if "TRACK" in line.split(' '):
+            cs = line.split(' ')[1]
+            fnew.write(line)
+        elif cs == callsign and '<>' in line:
+            if phase=='departure':
+                subs = line.split('<>',1)
+                subs.insert(1,'<'+tracklist+'>')
+            if phase =='arrival':
+                subs = line.rsplit('<>',1)
+                subs.insert(1,'<'+tracklist+'>')
+            newline = ''.join(subs)
+            print('newline:',newline)
+            fnew.write(newline)
+        else:
+            fnew.write(line)
+                
+    f.close()
+    fnew.close()
+
+def write_base_trx_from_iff(iff_data,callsign,fname):
+    init_t2 = iff_data[2][iff_data[2]["callsign"]==callsign].loc[0]
+    init_t3 = iff_data[3][iff_data[3]["callsign"]==callsign].loc[0]
+    ts = init_t3.time
+    cs = callsign
+    origin = 'K'+init_t2.Orig
+    lat = init_t3.latitude
+    lat = 37.61854
+    lon = init_t3.longitude
+    lon = -122.3817
+    spd = init_t3.tas
+    hdg = init_t3.heading
+
+    print('Initial latitude is:',lat)
+    print('Initial longitude is:',lon)
+    print('Initial speed is:',spd)
+    print('Intiial heading is:',hdg)
+
+    #predefined for now, but want to get these from the data somehow
+    actype = 'B733'
+    dest = 'KPHX'
+    cent = 'ZOA'
+    sect = 'ZOA46'
+    alt = 0.13
+    wpts = ".RW01L.SSTIK3.LOSHN..BOILE..BLH.HYDRR1.I07R.RW07R."
+
+    f = open('{}.trx'.format(fname),"w+")
+    f.write('TRACK_TIME {}\n'.format(ts.asm8.astype(np.int64)//10**9))
+    f.write('TRACK {} {} {} {} {} {} {}\n'.format(cs,actype,lat*10**4,abs(lon*10**4),int(spd),alt,int(hdg)))
+    f.write('    FP_ROUTE {}.<>{}<>.{}\n'.format(origin,wpts,dest))
+    f.close()
+    
+    f = open('{}_mfl.trx'.format(fname),"w+")
+    f.write('{} 330\n'.format(cs))
+    f.close()
